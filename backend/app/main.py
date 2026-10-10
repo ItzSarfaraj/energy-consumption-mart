@@ -3,12 +3,26 @@ from pathlib import Path
 
 import duckdb
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.services.pipeline_service import (
+    run_pipeline,
+    get_pipeline_status,
+)
 
+
+# --------------------------------------------------
 # Project paths
+# --------------------------------------------------
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DB_PATH = PROJECT_ROOT / "backend" / "energy_mart.duckdb"
+
+
+# --------------------------------------------------
+# FastAPI application
+# --------------------------------------------------
 
 app = FastAPI(
     title="Energy Consumption Mart API",
@@ -19,15 +33,23 @@ app = FastAPI(
 # Allow the Vite development server to call this API.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
+# --------------------------------------------------
+# Database helper
+# --------------------------------------------------
+
 def query_database(sql: str, params: list | None = None):
     """Execute a read-only SQL query and return rows as dictionaries."""
+
     if not DB_PATH.exists():
         raise HTTPException(
             status_code=500,
@@ -52,6 +74,10 @@ def query_database(sql: str, params: list | None = None):
         ) from exc
 
 
+# --------------------------------------------------
+# General endpoints
+# --------------------------------------------------
+
 @app.get("/")
 def root():
     return {
@@ -67,6 +93,10 @@ def health():
         "database_exists": DB_PATH.exists(),
     }
 
+
+# --------------------------------------------------
+# Overview endpoint
+# --------------------------------------------------
 
 @app.get("/api/overview")
 def get_overview():
@@ -92,6 +122,10 @@ def get_overview():
     rows = query_database(sql)
     return rows[0]
 
+
+# --------------------------------------------------
+# Hourly consumption endpoint
+# --------------------------------------------------
 
 @app.get("/api/hourly")
 def get_hourly(
@@ -136,6 +170,9 @@ def get_hourly(
     return query_database(sql, params)
 
 
+# --------------------------------------------------
+# Daily consumption endpoint
+# --------------------------------------------------
 
 @app.get("/api/daily")
 def get_daily(
@@ -172,6 +209,9 @@ def get_daily(
     )
 
 
+# --------------------------------------------------
+# Data quality endpoint
+# --------------------------------------------------
 
 @app.get("/api/quality")
 def get_quality(
@@ -203,6 +243,32 @@ def get_quality(
     return {
         "status_summary": query_database(summary_sql),
         "incomplete_hours": query_database(
-            incomplete_sql, [limit]
+            incomplete_sql,
+            [limit],
         ),
     }
+
+
+# --------------------------------------------------
+# Pipeline control endpoints
+# --------------------------------------------------
+
+@app.get("/api/pipeline/status")
+def pipeline_status():
+    return get_pipeline_status()
+
+
+@app.post("/api/pipeline/run")
+async def start_pipeline():
+    result = await run_in_threadpool(run_pipeline)
+
+    if result.get("status") == "already_running":
+        raise HTTPException(
+            status_code=409,
+            detail=result.get(
+                "message",
+                "A pipeline run is already in progress.",
+            ),
+        )
+
+    return result
