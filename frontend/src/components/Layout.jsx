@@ -9,6 +9,7 @@ import {
   Workflow,
   Zap,
   ChevronRight,
+  BrainCircuit
 } from "lucide-react";
 import { useEffect } from "react";
 
@@ -16,6 +17,7 @@ const navItems = [
   { to: "/", label: "Overview", icon: LayoutDashboard, end: true },
   { to: "/quality", label: "Data Quality", icon: ShieldCheck },
   { to: "/explorer", label: "Explorer", icon: ChartNoAxesCombined },
+  { to: "/ai-insights", label: "AI Insights", icon: BrainCircuit },
   { to: "/pipeline", label: "Pipeline Control", icon: Workflow },
 ];
 

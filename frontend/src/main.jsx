@@ -8,9 +8,8 @@ import "./index.css";
 
 const Overview = lazy(() => import("./pages/Overview"));
 const DataQuality = lazy(() => import("./pages/DataQuality"));
-const ConsumptionExplorer = lazy(
-  () => import("./pages/ConsumptionExplorer"),
-);
+const ConsumptionExplorer = lazy(() => import("./pages/ConsumptionExplorer"));
+const AIInsights = lazy(() => import("./pages/AIInsights"));
 const PipelineControl = lazy(() => import("./pages/PipelineControl"));
 
 function PageLoader() {
@@ -42,6 +41,7 @@ const router = createBrowserRouter([
       { index: true, element: loadPage(Overview) },
       { path: "quality", element: loadPage(DataQuality) },
       { path: "explorer", element: loadPage(ConsumptionExplorer) },
+      { path: "ai-insights", element: loadPage(AIInsights) },
       { path: "pipeline", element: loadPage(PipelineControl) },
     ],
   },

@@ -7,3 +7,8 @@ pytest
 python-multipart
 python-dotenv
 httpx
+langchain-core
+langchain-huggingface
+huggingface-hub
+langchain-google-genai
+google-genai

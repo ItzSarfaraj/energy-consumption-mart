@@ -1,7 +1,3 @@
-
-from pathlib import Path
-
-import duckdb
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,15 +6,12 @@ from app.services.pipeline_service import (
     run_pipeline,
     get_pipeline_status,
 )
-
-
-# --------------------------------------------------
-# Project paths
-# --------------------------------------------------
-
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DB_PATH = PROJECT_ROOT / "backend" / "energy_mart.duckdb"
-
+from app.data.database import DB_PATH, query_database
+from app.services.insights_service import (
+    generate_energy_insights,
+    clear_insights_cache,
+)
+from app.ai.schemas import AIInsightsResponse
 
 # --------------------------------------------------
 # FastAPI application
@@ -41,37 +34,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# --------------------------------------------------
-# Database helper
-# --------------------------------------------------
-
-def query_database(sql: str, params: list | None = None):
-    """Execute a read-only SQL query and return rows as dictionaries."""
-
-    if not DB_PATH.exists():
-        raise HTTPException(
-            status_code=500,
-            detail="DuckDB database not found. Run the data pipeline first.",
-        )
-
-    try:
-        with duckdb.connect(str(DB_PATH), read_only=True) as con:
-            cursor = con.execute(sql, params or [])
-            columns = [item[0] for item in cursor.description]
-            rows = cursor.fetchall()
-
-            return [
-                dict(zip(columns, row))
-                for row in rows
-            ]
-
-    except duckdb.Error as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Database query failed: {exc}",
-        ) from exc
 
 
 # --------------------------------------------------
@@ -271,4 +233,25 @@ async def start_pipeline():
             ),
         )
 
+    clear_insights_cache()
     return result
+
+@app.get(
+    "/api/ai/insights",
+    response_model=AIInsightsResponse,
+)
+async def get_ai_insights(
+    force_refresh: bool = Query(default=False),
+):
+    try:
+        return await run_in_threadpool(
+            generate_energy_insights,
+            force_refresh=force_refresh,
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=502,
+            detail="AI insight generation failed. Check server logs.",
+        )

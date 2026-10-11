@@ -21,4 +21,21 @@ export const getDaily = async (params = {}) => {
   return response.data;
 };
 
+
+
+
+export const getAIInsights = async (forceRefresh = false) => {
+  const response = await api.get("/api/ai/insights", {
+    params: {
+      force_refresh: forceRefresh,
+    },
+    timeout: 120000,
+  });
+
+  return response.data;
+};
+
+
+
+
 export default api;
