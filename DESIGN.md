@@ -2,39 +2,50 @@
 
 ## 1. Objective
 
-Energy Consumption Mart transforms synthetic cumulative smart-meter readings into reusable interval, hourly, and daily consumption models. It identifies peak-consumption periods, measures data completeness, and generates narrative insights grounded in warehouse metrics.
+Energy Consumption Mart transforms synthetic cumulative smart-meter readings into reusable interval, hourly, and daily consumption models. It identifies data-quality issues, measures completeness, and presents analytical results through a dashboard with AI-assisted insights.
 
-## 2. Architecture
+The primary design goal is to create a reproducible, testable analytics pipeline using lightweight technologies without requiring complex infrastructure.
 
-The solution uses a React and Vite frontend, a FastAPI backend, and DuckDB as the analytical database. Pandas and NumPy generate and prepare synthetic data, while SQL performs the warehouse transformations. The frontend calls REST endpoints exposed by FastAPI.
+## 2. Architecture and Data Flow
 
-**Data flow:** Synthetic CSV files → ingestion → raw reading tables → staging and quality flags → interval consumption fact → hourly and daily marts. An independent expected-interval grid joins the interval fact to produce hourly quality metrics. DuckDB metrics feed the insights service, which returns an AI-generated or deterministic fallback narrative.
+The solution uses Python and Pandas for data ingestion, DuckDB for analytical storage, SQL for transformations, FastAPI for backend services, and React with Recharts for visualization.
 
-## 3. Data Model
+**Data flow:**
 
-- **Raw tables:** Store clean baseline readings and readings containing intentional anomalies.
-- **Staging table:** Adds flags for duplicate readings, null or negative values, timestamp gaps, and possible meter resets.
-- **Interval fact:** Calculates consumption as the difference between consecutive cumulative readings. Invalid intervals are classified and their consumption is set to null.
-- **Hourly mart:** Aggregates interval consumption and tracks valid intervals and completeness.
-- **Daily mart:** Summarizes daily consumption and identifies the highest-consumption hour for each meter and day.
-- **Expected intervals and hourly quality mart:** Generate the expected 15-minute timeline and compare it with valid fact records to measure completeness.
+Synthetic CSV files → Python ingestion → DuckDB raw tables → SQL staging → interval consumption fact → hourly and daily marts → FastAPI → React dashboard.
 
-## 4. Data Quality and Assumptions
+A separate expected-interval model supports completeness assessment by feeding into the hourly quality mart. The insights service uses analytical metrics to generate AI-assisted narratives through a local Ollama model, with fallback behavior when AI generation fails.
 
-The reproducible synthetic dataset contains 10 meters across 5 sites, with 15-minute readings over 30 days. It deliberately introduces a duplicate, a missing reading, a null value, a negative reading, and a simulated meter reset.
+The pipeline is divided into independent stages so that transformations, quality checks, API behavior, and application functionality can be tested separately.
 
-The design preserves raw inputs and applies quality rules during transformation. Consumption is calculated only when the interval is classified as valid. The expected timeline assumes a fixed January 1–30, 2026 reporting window and four expected intervals per hour.
+## 3. Key Design Decisions and Trade-offs
 
-## 5. Technology Choices and Trade-offs
+| Decision | Reason | Trade-off or alternative |
+|---|---|---|
+| DuckDB for analytical storage | Lightweight, local, and well suited to SQL-based analytical workloads | A managed warehouse or PostgreSQL could be considered for production requirements involving concurrency, availability, and centralized operations |
+| SQL-based transformations | Makes analytical logic explicit, reusable, and independently verifiable | A transformation framework such as dbt could improve dependency management and documentation as the project grows |
+| Synthetic data | Enables reproducible tests and controlled anomaly scenarios without exposing real customer data | Public or authorized production meter data would be needed to evaluate real-world behavior |
+| Separate expected-interval model | Measures missing data instead of relying only on observed readings | More advanced quality frameworks could provide configurable rules and historical monitoring |
+| FastAPI backend | Separates data processing from frontend presentation and provides documented REST endpoints | Authentication, monitoring, and deployment hardening are needed for production |
+| React and Recharts | Provides interactive consumption and data-quality visualizations | Larger datasets may require pagination, aggregation, or additional performance optimization |
+| Local Ollama model with fallback | Demonstrates AI-assisted analysis without requiring a hosted model API for the configured workflow | Local inference has hardware and latency constraints; deterministic summaries or a hosted model are alternatives |
 
-- **DuckDB:** Provides lightweight analytical SQL without requiring a separately managed database server.
-- **FastAPI:** Exposes analytics and pipeline operations through HTTP endpoints.
-- **React, Vite, and Recharts:** Support an interactive dashboard for consumption and quality analysis.
-- **Synthetic data:** Makes the project reproducible and safe to share, but does not establish real-world energy-consumption patterns.
-- **AI with deterministic fallback:** Adds readable explanations while allowing the application to return insights when model generation is unavailable.
+## 4. Data Model and Quality Strategy
 
-## 6. Validation and Limitations
+The SQL pipeline separates raw readings, staging data, interval consumption, hourly and daily marts, expected intervals, and hourly quality metrics.
 
-The current warehouse validation passed all four checks: 28,800 expected intervals, 7,200 hourly quality rows, and zero duplicate keys in both expected intervals and hourly quality records. The backend test suite passed all 10 tests.
+Interval consumption is calculated from consecutive cumulative readings. Invalid intervals are classified so that missing values, negative differences, and potential meter resets are not blindly treated as valid consumption.
 
-The reporting window is currently hardcoded, and the synthetic dataset is not a substitute for production meter data. Future improvements include dynamic reporting dates, additional quality tests, scheduled execution, and expanded deployment documentation.
+The expected-interval model supports completeness checks, while the verification script checks row counts and duplicate keys. This approach makes data-quality problems visible before the metrics are consumed by the dashboard.
+
+## 5. Assumptions and Limitations
+
+The documented synthetic dataset uses 10 meters across 5 sites, 15-minute reading intervals, and a 30-day period. The documented reporting window is fixed to January 1–30, 2026.
+
+Synthetic readings do not establish real-world electricity-consumption patterns. The local DuckDB setup is intended for a reproducible assessment project rather than a high-availability production platform. AI-generated narratives may be inaccurate, so analytical metrics remain the source of truth.
+
+Previously recorded validation results include 28,800 expected intervals, 7,200 hourly quality rows, zero duplicate keys in both checked models, and 99.98% average completeness. The latest recorded backend test suite passed 12 tests. These results should be revalidated after code or data changes.
+
+## 6. Future Improvements
+
+For production use, I would introduce configurable reporting dates, scheduled pipeline execution, stronger schema and quality validation, structured logging and alerting, authentication and authorization, and automated deployment. I would also evaluate AI narrative accuracy and latency, improve fallback monitoring, and consider a managed analytical warehouse if workload requirements outgrow the local database.
